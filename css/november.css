@@ -6,69 +6,50 @@
 
 body
 {
-    background: #cacaca;
+    background: #6c6c6c;
 }
 
-header
+nav
 {
-    background: #acacac;
-    background-size: auto 80%;
-    box-shadow: 0 0 5px 2px #3a3a3a;
-    color: #ffffff;
-    padding: 25px;
-    position: relative;
-}
-
-header h1,
-header h2
-{
-    font-family: 'Sans', sans-serif;
-    text-shadow: -2px -2px 2px #000, -2px 2px 2px #000, 2px 2px 2px #000, 2px -2px 2px #000;
-}
-
-header h1
-{
-    font-size: 24px;
-}
-
-header h2
-{
-    font-size: 14px;
-}
-
-header nav
-{
-    bottom: 0;
-    height: 100%;
-    position: absolute;
-    right: 25px;
-}
-
-header nav a
-{
-    background-size: 100%;
-    display: inline-block;
+    background: #696969;
+    box-shadow: 0 0 4px 4px #636363;
     font-size: 0;
-    height: 64px;
-    width: 64px;
+    height: 96px;
+    margin-top: -64px;
+    padding: 16px 0;
+    position: absolute;
+    text-align: center;
+    top: 50%;
+    width: 100%;
 }
 
-header nav a.npolar
+nav a
+{
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    display: inline-block;
+    height: 96px;
+    margin: 0 16px;
+    width: 96px;
+}
+
+nav a.npolar
 {
     background-image: url('../gfx/npolar-dark.png');
 }
 
-header nav a.npolar:hover
+nav a.npolar:hover
 {
     background-image: url('../gfx/npolar-light.png');
 }
 
-header nav a.github
+nav a.github
 {
     background-image: url('../gfx/github-dark.png');
 }
 
-header nav a.github:hover
+nav a.github:hover
 {
     background-image: url('../gfx/github-light.png');
 }
