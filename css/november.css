@@ -60,14 +60,8 @@ nav a.github:hover
     color: #3c3c3c;
     font-family: monospace;
     font-size: 10px;
-    opacity: 0.4;
     position: absolute;
     right: 5px;
-}
-
-#tagline:hover
-{
-    opacity: 1.0;
 }
 
 #tagline a
