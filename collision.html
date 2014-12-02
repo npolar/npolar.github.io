@@ -62,7 +62,7 @@
         
         <script>
             var options = {
-                mouseIntersections: document.getElementById('mouseIntersections').checked
+                mouseIntersections: !!(document.getElementById('mouseIntersections').checked)
             };
             
             function optionSet(elem) {
@@ -73,32 +73,42 @@
                 this.element = (typeof canvasElement == 'string' ? document.getElementById(canvasElement) : canvasElement) || null;
                 this.context = (this.element ? this.element.getContext('2d') : null);
                 this.height = (this.element ? (this.element.height = this.element.offsetHeight) : 0);
+                this.mouse = { buttons: [], position: new PolyTest.Vertex(0, 0) };
                 this.polygons = [];
                 this.width = (this.element ? (this.element.width = this.element.offsetWidth) : 0);
-                this.mouse = new PolyTest.Vertex(0, 0);
                 
                 if(this.element && this.context) {
                     var self = this;
                     
                     this.element.addEventListener('mousemove', function(e) {
                         self.onMouseMove({
-                            buttons: e.buttons,
+                            buttons: self.mouse.buttons,
                             x: e.layerX / self.width,
                             y: e.layerY / self.height
                         });
                     });
                     
                     this.element.addEventListener('mousedown', function(e) {
+                        if(self.mouse.buttons.indexOf(e.button) == -1) {
+                            self.mouse.buttons.push(e.button);
+                        }
+                        
                         self.onMouseDown({
-                            buttons: e.buttons,
+                            button: e.button,
                             x: e.layerX / self.width,
                             y: e.layerY / self.height
                         });
                     });
                     
                     this.element.addEventListener('mouseup', function(e) {
+                        var buttonIndex = self.mouse.buttons.indexOf(e.button);
+                        
+                        if(buttonIndex != -1) {
+                            self.mouse.buttons.splice(buttonIndex, 1);
+                        }
+                        
                         self.onMouseUp({
-                            buttons: e.buttons,
+                            button: e.button,
                             x: e.layerX / self.width,
                             y: e.layerY / self.height
                         });
@@ -136,8 +146,8 @@
                     }
                 },
                 onMouseMove: function(event) {
-                    this.mouse.x = event.x;
-                    this.mouse.y = event.y;
+                    this.mouse.position.x = event.x;
+                    this.mouse.position.y = event.y;
                     
                     for(var p in this.polygons) {
                         this.polygons[p].onMouseMove(event);
@@ -347,7 +357,7 @@
                     return false;
                 },
                 onMouseDown: function(event) {
-                    if(event.buttons & 1) {
+                    if(event.button === 0) {
                         for(var v in this.vertices) {
                             if(this.vertices[v].hover) {
                                 this.vertices[v].drag = { x: event.x, y: event.y };
@@ -369,14 +379,14 @@
                     }
                     
                     this.removeIntersection(this.parent.mouse);
-                    if(this.contains(this.parent.mouse) && options.mouseIntersections) {
+                    if(this.contains(this.parent.mouse.position) && options.mouseIntersections) {
                         this.addIntersection(this.parent.mouse);
                     }
                     
                     this.parent.draw();
                 },
                 onMouseUp: function(event) {
-                    if(event.buttons & 1) {
+                    if(event.button === 0) {
                         for(var v in this.vertices) {
                             if(this.vertices[v].drag) {
                                 this.vertices[v].drag = null;
