@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            *
+            {
+                margin: 0;
+                padding: 0;
+            }
+            
+            body
+            {
+                overflow: hidden;
+            }
+            
+            #options
+            {
+                background: #fafafa;
+                box-shadow: 0 0 4px 2px #ccc;
+                border-bottom-right-radius: 5px;
+                font-family: monospace;
+                font-size: 12px;
+                padding: 10px;
+                position: absolute;
+            }
+            
+            #options input
+            {
+                vertical-align: middle;
+            }
+            
+            #container
+            {
+                background: #fafafa;
+                box-shadow: 0 0 4px 2px #ccc;
+                box-sizing: border-box;
+                height: 100%;
+                left: 50%;
+                margin: 0 auto auto -400px;
+                position: absolute;
+                width: 800px;
+            }
+            
+            #container canvas
+            {
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+    </head>
+    
+    <body>
+        <form id="options">
+            <label>Mouse intersections:</label>
+            <input type="checkbox" id="mouseIntersections" onchange="optionSet(this)" />
+        </form>
+        
+        <div id="container">
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <script>
+            var options = {
+                mouseIntersections: document.getElementById('mouseIntersections').checked
+            };
+            
+            function optionSet(elem) {
+                options[elem.id] = elem.checked;
+            }
+            
+            var PolyTest = function(canvasElement) {
+                this.element = (typeof canvasElement == 'string' ? document.getElementById(canvasElement) : canvasElement) || null;
+                this.context = (this.element ? this.element.getContext('2d') : null);
+                this.height = (this.element ? (this.element.height = this.element.offsetHeight) : 0);
+                this.polygons = [];
+                this.width = (this.element ? (this.element.width = this.element.offsetWidth) : 0);
+                this.mouse = new PolyTest.Vertex(0, 0);
+                
+                if(this.element && this.context) {
+                    var self = this;
+                    
+                    this.element.addEventListener('mousemove', function(e) {
+                        self.onMouseMove({
+                            buttons: e.buttons,
+                            x: e.layerX / self.width,
+                            y: e.layerY / self.height
+                        });
+                    });
+                    
+                    this.element.addEventListener('mousedown', function(e) {
+                        self.onMouseDown({
+                            buttons: e.buttons,
+                            x: e.layerX / self.width,
+                            y: e.layerY / self.height
+                        });
+                    });
+                    
+                    this.element.addEventListener('mouseup', function(e) {
+                        self.onMouseUp({
+                            buttons: e.buttons,
+                            x: e.layerX / self.width,
+                            y: e.layerY / self.height
+                        });
+                    });
+                }
+            };
+            
+            PolyTest.prototype = {
+                addPolygon: function(polygon) {
+                    if(polygon instanceof PolyTest.Polygon) {
+                        polygon.parent = this;
+                        this.polygons.push(polygon);
+                        return polygon;
+                    } else if(typeof polygon == 'object') {
+                        var poly = new PolyTest.Polygon(polygon, this)
+                        this.polygons.push(poly);
+                        return poly;
+                    }
+                    
+                    console.error('Object is not a valid Polygon', polygon);
+                    return null;
+                },
+                draw: function() {
+                    if(this.context instanceof CanvasRenderingContext2D) {
+                        this.context.clearRect(0, 0, this.width, this.height);
+                        
+                        for(var p in this.polygons) {
+                            this.polygons[p].draw();
+                        }
+                    }
+                },
+                onMouseDown: function(event) {
+                    for(var p in this.polygons) {
+                        this.polygons[p].onMouseDown(event);
+                    }
+                },
+                onMouseMove: function(event) {
+                    this.mouse.x = event.x;
+                    this.mouse.y = event.y;
+                    
+                    for(var p in this.polygons) {
+                        this.polygons[p].onMouseMove(event);
+                        
+                        if(this.polygons[p].moving) {
+                            for(var q in this.polygons) {
+                                if(q != p) {
+                                    this.polygons[p].removeIntersection(this.polygons[q]);
+                                    this.polygons[q].removeIntersection(this.polygons[p]);
+                                    
+                                    if(this.polygons[p].intersects(this.polygons[q])) {
+                                        this.polygons[p].addIntersection(this.polygons[q]);
+                                        this.polygons[q].addIntersection(this.polygons[p]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                onMouseUp: function(event) {
+                    for(var p in this.polygons) {
+                        this.polygons[p].onMouseUp(event);
+                    }
+                },
+                removePolygon: function(index) {
+                    if(index < this.polygons.length) {
+                        this.polygons.splice(index, 1);
+                    } else {
+                        console.error('Polygon index out of range for removal', index);
+                    }
+                },
+            };
+            
+            PolyTest.Vertex = function(x, y) {
+                this.hover = false;
+                this.x = (x || 0.0);
+                this.y = (y || 0.0);
+            };
+            
+            PolyTest.Vertex.prototype = {
+                contains: function(x, y, xrad, yrad) {
+                    return (x >= this.x - xrad && x <= this.x + xrad && y >= this.y - yrad && y <= this.y + yrad);
+                },
+                intersects: function(segment) {
+                    if(segment instanceof PolyTest.Segment) {
+                        return ((segment.b.x <= Math.max(segment.a.x, this.x) && segment.b.x >= Math.min(segment.a.x, this.x)) &&
+                                (segment.b.y <= Math.max(segment.a.y, this.y) && segment.b.y >= Math.min(segment.a.y, this.y)));
+                    }
+                    
+                    return false;
+                }
+            };
+            
+            PolyTest.Segment = function(a, b) {
+                this.a = new PolyTest.Vertex;
+                this.b = new PolyTest.Vertex;
+                
+                if(a instanceof PolyTest.Vertex && b instanceof PolyTest.Vertex) {
+                    this.a = a;
+                    this.b = b;
+                }
+            };
+            
+            PolyTest.Segment.prototype = {
+                direction: function(point) {
+                    var dir = (((this.b.y - this.a.y) * (point.x - this.b.x)) - ((this.b.x - this.a.x) * (point.y - this.b.y)));
+                    
+                    // 0: Colinear, 1: Clockwise, -1: Counter-Clockwise
+                    return (dir > 0 ? 1 : (dir < 0 ? -1 : 0));
+                },
+                intersects: function(segment) {
+                    if(segment instanceof PolyTest.Segment) {
+                        var aba = this.direction(segment.a),
+                            abb = this.direction(segment.b),
+                            baa = segment.direction(this.a),
+                            bab = segment.direction(this.b);
+                            
+                        if(aba !== abb && baa !== bab) {
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                }
+            };
+            
+            PolyTest.Polygon = function(params, parent) {
+                params = (typeof params == 'object' ? params : null);
+                
+                this.fillColor = (params.fillColor || 'rgba(0, 0, 0, 0.5)');
+                this.fillCollisionColor = (params.fillCollisionColor || 'rgba(128, 128, 128, 0.5)');
+                this.parent = (parent || params.parent || null);
+                this.pointColor = (params.pointColor || 'rgba(255, 0, 0, 0.4)');
+                this.pointHoverColor = (params.pointHoverColor || 'rgba(255, 0, 0, 0.8)');
+                this.pointSize = (params.pointSize || 5);
+                this.strokeColor = (params.strokeColor || 'rgba(0, 0, 0, 1.0)');
+                this.strokeWidth = (params.strokeWidth || 1);
+                this.vertices = (params.vertices instanceof Array ? params.vertices : []);
+                
+                this.bounding = { min: { x: Number.MAX_VALUE, y: Number.MAX_VALUE }, max: { x: -Number.MAX_VALUE, y: -Number.MAX_VALUE } };
+                this.intersections = [];
+                this.colliding = false;
+                this.moving = false;
+                
+                for(var v in this.vertices) {
+                    if(!(this.vertices[v] instanceof PolyTest.Vertex)) {
+                        if(Number(this.vertices[v].x) !== NaN && Number(this.vertices[v].y) !== NaN) {
+                            this.vertices[v] = new PolyTest.Vertex(this.vertices[v].x, this.vertices[v].y);
+                        } else {
+                            console.error('Object is not a valid Vertex', vertices[v], 'index ' + v);
+                        }
+                    }
+                    
+                    this.bounding.min.x = Math.min(this.bounding.min.x, this.vertices[v].x);
+                    this.bounding.min.y = Math.min(this.bounding.min.y, this.vertices[v].y);
+                    this.bounding.max.x = Math.max(this.bounding.max.x, this.vertices[v].x);
+                    this.bounding.max.y = Math.max(this.bounding.max.y, this.vertices[v].y);
+                }
+            };
+            
+            PolyTest.Polygon.prototype = {
+                addIntersection: function(object) {
+                    var intersectionIndex = this.intersections.indexOf(object);
+                    
+                    if(intersectionIndex == -1) {
+                        this.intersections.push(object);
+                    }
+                },
+                contains: function(vertex) {
+                    var inside = false;
+                    
+                    if(vertex instanceof PolyTest.Vertex) {
+                        for(var i = 0, j = this.vertices.length - 1; i < this.vertices.length; j = i++) {
+                            if(((this.vertices[i].y > vertex.y) != (this.vertices[j].y > vertex.y)) && (vertex.x < (this.vertices[j].x - this.vertices[i].x) * (vertex.y - this.vertices[i].y) / (this.vertices[j].y - this.vertices[i].y) + this.vertices[i].x)) {
+                                inside = !inside;
+                            }
+                        }
+                    }
+                    
+                    return inside;
+                },
+                draw: function() {
+                    if(this.parent instanceof PolyTest) {
+                        if(this.parent.context instanceof CanvasRenderingContext2D) {
+                            if(this.vertices.length >= 3) {
+                                var first = {
+                                    x: (this.parent.width / 1.0) * this.vertices[0].x,
+                                    y: (this.parent.height / 1.0) * this.vertices[0].y
+                                }, v, x, y;
+                                
+                                this.parent.context.beginPath();
+                                this.parent.context.fillStyle = (this.intersections.length ? this.fillCollisionColor : this.fillColor);
+                                this.parent.context.strokeStyle = this.strokeColor;
+                                this.parent.context.lineWidth = this.strokeWidth;
+                                this.parent.context.moveTo(first.x, first.y);
+                                
+                                for(v = 1; v < this.vertices.length; ++v) {
+                                    x = (this.parent.width / 1.0) * this.vertices[v].x;
+                                    y = (this.parent.height / 1.0) * this.vertices[v].y;
+                                        
+                                    this.parent.context.lineTo(x, y);
+                                }
+                                
+                                this.parent.context.lineTo(first.x, first.y);
+                                this.parent.context.fill();
+                                this.parent.context.stroke();
+                                
+                                for(v = 0; v < this.vertices.length; ++v) {
+                                    x = (this.parent.width / 1.0) * this.vertices[v].x;
+                                    y = (this.parent.height / 1.0) * this.vertices[v].y;
+                                    
+                                    this.parent.context.beginPath();
+                                    this.parent.context.fillStyle = (this.vertices[v].hover ? this.pointHoverColor : this.pointColor);
+                                    this.parent.context.arc(x, y, this.pointSize, 0, 2 * Math.PI);
+                                    this.parent.context.fill();
+                                }
+                            }
+                        } 
+                    }
+                },
+                intersects: function(polygon) {
+                    if(polygon instanceof PolyTest.Polygon) {
+                        this.removeIntersection(polygon);
+                        polygon.removeIntersection(this);
+                        
+                        for(var v in this.vertices) {
+                            if(polygon.contains(this.vertices[v])) {
+                                this.addIntersection(polygon);
+                                polygon.addIntersection(this);
+                                return true;
+                            }
+                        }
+                        
+                        for(var va = 0; va < this.vertices.length; ++va) {
+                            var sa = new PolyTest.Segment(this.vertices[va], this.vertices[(va >= this.vertices.length - 1) ? 0 : va + 1]);
+                            
+                            for(var vb = 0; vb < polygon.vertices.length; ++vb) {
+                                var sb = new PolyTest.Segment(polygon.vertices[vb], polygon.vertices[(vb >= polygon.vertices.length - 1) ? 0 : vb + 1]);
+                                
+                                if(sa.intersects(sb)) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    return false;
+                },
+                onMouseDown: function(event) {
+                    if(event.buttons & 1) {
+                        for(var v in this.vertices) {
+                            if(this.vertices[v].hover) {
+                                this.vertices[v].drag = { x: event.x, y: event.y };
+                                this.moving = true;
+                            }
+                        }
+                    }
+                },
+                onMouseMove: function(event) {
+                    for(var v in this.vertices) {
+                        var vertHover = this.vertices[v].contains(event.x, event.y, (1.0 / this.parent.width) * this.pointSize, (1.0 / this.parent.height) * this.pointSize);
+                        
+                        if(this.vertices[v].drag) {
+                            this.vertices[v].x = event.x;
+                            this.vertices[v].y = event.y;
+                        } else if(this.vertices[v].hover != vertHover) {
+                            this.vertices[v].hover = vertHover;
+                        }
+                    }
+                    
+                    this.removeIntersection(this.parent.mouse);
+                    if(this.contains(this.parent.mouse) && options.mouseIntersections) {
+                        this.addIntersection(this.parent.mouse);
+                    }
+                    
+                    this.parent.draw();
+                },
+                onMouseUp: function(event) {
+                    if(event.buttons & 1) {
+                        for(var v in this.vertices) {
+                            if(this.vertices[v].drag) {
+                                this.vertices[v].drag = null;
+                                this.moving = false;
+                            }
+                        }
+                    }
+                },
+                removeIntersection: function(object) {
+                    var intersectionIndex = this.intersections.indexOf(object);
+                    
+                    if(intersectionIndex != -1) {
+                        this.intersections.splice(intersectionIndex, 1);
+                    }
+                }
+            };
+            
+            var poly = new PolyTest('canvas');
+            
+            poly.addPolygon({
+                fillColor: 'rgba(255, 0, 0, 0.5)',
+                fillCollisionColor: 'rgba(128, 0, 0, 0.5)',
+                vertices: [{ x: 0.2, y: 0.2 }, { x: 0.4, y: 0.2 }, { x: 0.4, y: 0.3}, { x: 0.3, y: 0.4 }, { x: 0.1, y: 0.4 }, { x: 0.1, y: 0.3 }]
+            });
+            
+            poly.addPolygon({
+                fillColor: 'rgba(0, 255, 0, 0.5)',
+                fillCollisionColor: 'rgba(0, 128, 0, 0.5)',
+                vertices: [{ x: 0.4, y: 0.6 }, { x: 0.6, y: 0.6 }, { x: 0.5, y: 0.4 }]
+            });
+            
+            poly.addPolygon({
+                fillColor: 'rgba(0, 0, 255, 0.5)',
+                fillCollisionColor: 'rgba(0, 0, 128, 0.5)',
+                vertices: [{ x: 0.7, y: 0.1 }, { x: 0.8, y: 0.2 }, { x: 0.8, y: 0.3 }, { x: 0.6, y: 0.3 }, { x: 0.6, y: 0.2 } ]
+            });
+            
+            poly.draw();
+            
+        </script>
+    </body>
+</html>
