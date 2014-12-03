@@ -52,8 +52,8 @@
     
     <body>
         <form id="options">
-            <label>Mouse intersections:</label>
-            <input type="checkbox" id="mouseIntersections" onchange="optionSet(this)" />
+            <label>Show intersections:</label>
+            <input type="checkbox" id="showIntersections" onchange="optionSet(this)" />
         </form>
         
         <div id="container">
@@ -62,11 +62,12 @@
         
         <script>
             var options = {
-                mouseIntersections: !!(document.getElementById('mouseIntersections').checked)
+                showIntersections: !!(document.getElementById('showIntersections').checked)
             };
             
             function optionSet(elem) {
                 options[elem.id] = elem.checked;
+                poly.draw();
             }
             
             var PolyTest = function(canvasElement) {
@@ -135,8 +136,29 @@
                     if(this.context instanceof CanvasRenderingContext2D) {
                         this.context.clearRect(0, 0, this.width, this.height);
                         
+                        var intersections = [];
+                        
                         for(var p in this.polygons) {
                             this.polygons[p].draw();
+                            
+                            var polyIntersections = this.polygons[p].intersections();
+                            for(var pi in polyIntersections) {
+                                intersections.push(polyIntersections[pi]);
+                            }
+                        }
+                        
+                        if(options.showIntersections) {
+                            for(var i in intersections) {
+                                if(intersections[i] instanceof PolyTest.Vertex) {
+                                    var x = (this.width / 1.0) * intersections[i].x,
+                                        y = (this.height / 1.0) * intersections[i].y;
+                                        
+                                    this.context.beginPath();
+                                    this.context.fillStyle = 'rgba(255, 255, 0, 0.8)';
+                                    this.context.arc(x, y, 5, 0, 2 * Math.PI);
+                                    this.context.fill();
+                                }
+                            }
                         }
                     }
                 },
@@ -148,8 +170,6 @@
                 onMouseMove: function(event) {
                     this.mouse.position.x = event.x;
                     this.mouse.position.y = event.y;
-                    
-                    var intersections = [];
                     
                     for(var p in this.polygons) {
                         this.polygons[p].onMouseMove(event);
@@ -166,23 +186,6 @@
                                     }
                                 }
                             }
-                        }
-                        
-                        var polyIntersections = this.polygons[p].intersections();
-                        for(var pi in polyIntersections) {
-                            intersections.push(polyIntersections[pi]);
-                        }
-                    }
-                    
-                    for(var i in intersections) {
-                        if(intersections[i] instanceof PolyTest.Vertex) {
-                            var x = (this.width / 1.0) * intersections[i].x,
-                                y = (this.height / 1.0) * intersections[i].y;
-                                
-                            this.context.beginPath();
-                            this.context.fillStyle = 'rgba(255, 255, 0, 0.8)';
-                            this.context.arc(x, y, 5, 0, 2 * Math.PI);
-                            this.context.fill();
                         }
                     }
                 },
@@ -434,11 +437,6 @@
                         } else if(this.vertices[v].hover != vertHover) {
                             this.vertices[v].hover = vertHover;
                         }
-                    }
-                    
-                    this.removeCollision(this.parent.mouse.position);
-                    if(this.contains(this.parent.mouse.position) && options.mouseIntersections) {
-                        this.addCollision(this.parent.mouse.position);
                     }
                     
                     this.parent.draw();
