@@ -123,7 +123,7 @@
                         this.polygons.push(polygon);
                         return polygon;
                     } else if(typeof polygon == 'object') {
-                        var poly = new PolyTest.Polygon(polygon, this)
+                        var poly = new PolyTest.Polygon(polygon, this);
                         this.polygons.push(poly);
                         return poly;
                     }
@@ -149,21 +149,40 @@
                     this.mouse.position.x = event.x;
                     this.mouse.position.y = event.y;
                     
+                    var intersections = [];
+                    
                     for(var p in this.polygons) {
                         this.polygons[p].onMouseMove(event);
                         
                         if(this.polygons[p].moving) {
                             for(var q in this.polygons) {
                                 if(q != p) {
-                                    this.polygons[p].removeIntersection(this.polygons[q]);
-                                    this.polygons[q].removeIntersection(this.polygons[p]);
+                                    this.polygons[p].removeCollision(this.polygons[q]);
+                                    this.polygons[q].removeCollision(this.polygons[p]);
                                     
                                     if(this.polygons[p].intersects(this.polygons[q])) {
-                                        this.polygons[p].addIntersection(this.polygons[q]);
-                                        this.polygons[q].addIntersection(this.polygons[p]);
+                                        this.polygons[p].addCollision(this.polygons[q]);
+                                        this.polygons[q].addCollision(this.polygons[p]);
                                     }
                                 }
                             }
+                        }
+                        
+                        var polyIntersections = this.polygons[p].intersections();
+                        for(var pi in polyIntersections) {
+                            intersections.push(polyIntersections[pi]);
+                        }
+                    }
+                    
+                    for(var i in intersections) {
+                        if(intersections[i] instanceof PolyTest.Vertex) {
+                            var x = (this.width / 1.0) * intersections[i].x,
+                                y = (this.height / 1.0) * intersections[i].y;
+                                
+                            this.context.beginPath();
+                            this.context.fillStyle = 'rgba(255, 255, 0, 0.8)';
+                            this.context.arc(x, y, 5, 0, 2 * Math.PI);
+                            this.context.fill();
                         }
                     }
                 },
@@ -178,7 +197,7 @@
                     } else {
                         console.error('Polygon index out of range for removal', index);
                     }
-                },
+                }
             };
             
             PolyTest.Vertex = function(x, y) {
@@ -202,8 +221,8 @@
             };
             
             PolyTest.Segment = function(a, b) {
-                this.a = new PolyTest.Vertex;
-                this.b = new PolyTest.Vertex;
+                this.a = new PolyTest.Vertex();
+                this.b = new PolyTest.Vertex();
                 
                 if(a instanceof PolyTest.Vertex && b instanceof PolyTest.Vertex) {
                     this.a = a;
@@ -231,6 +250,22 @@
                     }
                     
                     return false;
+                },
+                intersection: function(segment) {
+                    if(segment instanceof PolyTest.Segment) {
+                        // Warning: Divide by zero?
+                        
+                        var a = { x: this.b.x - this.a.x, y: this.b.y - this.a.y },
+                            b = { x: segment.b.x -segment.a.x, y: segment.b.y - segment.a.y },
+                            s = (-a.y * (this.a.x - segment.a.x) + a.x * (this.a.y - segment.a.y)) / (-b.x * a.y + a.x * b.y),
+                            t = ( b.x * (this.a.y - segment.a.y) - b.y * (this.a.x - segment.a.x)) / (-b.x * a.y + a.x * b.y);
+                            
+                        if(s >= 0.0 && s <= 1.0 && t >= 0.0 && t <= 1.0) {
+                            return (new PolyTest.Vertex(this.a.x + (t * a.x), this.a.y + (t * a.y)));
+                        }
+                    }
+                    
+                    return null;
                 }
             };
             
@@ -248,16 +283,16 @@
                 this.vertices = (params.vertices instanceof Array ? params.vertices : []);
                 
                 this.bounding = { min: { x: Number.MAX_VALUE, y: Number.MAX_VALUE }, max: { x: -Number.MAX_VALUE, y: -Number.MAX_VALUE } };
-                this.intersections = [];
+                this.collisions = [];
                 this.colliding = false;
                 this.moving = false;
                 
                 for(var v in this.vertices) {
                     if(!(this.vertices[v] instanceof PolyTest.Vertex)) {
-                        if(Number(this.vertices[v].x) !== NaN && Number(this.vertices[v].y) !== NaN) {
+                        if(!isNaN(Number(this.vertices[v].x)) && !isNaN(Number(this.vertices[v].y))) {
                             this.vertices[v] = new PolyTest.Vertex(this.vertices[v].x, this.vertices[v].y);
                         } else {
-                            console.error('Object is not a valid Vertex', vertices[v], 'index ' + v);
+                            console.error('Object is not a valid Vertex', this.vertices[v], 'index ' + v);
                         }
                     }
                     
@@ -269,11 +304,11 @@
             };
             
             PolyTest.Polygon.prototype = {
-                addIntersection: function(object) {
-                    var intersectionIndex = this.intersections.indexOf(object);
+                addCollision: function(object) {
+                    var collisionIndex = this.collisions.indexOf(object);
                     
-                    if(intersectionIndex == -1) {
-                        this.intersections.push(object);
+                    if(collisionIndex == -1) {
+                        this.collisions.push(object);
                     }
                 },
                 contains: function(vertex) {
@@ -299,7 +334,7 @@
                                 }, v, x, y;
                                 
                                 this.parent.context.beginPath();
-                                this.parent.context.fillStyle = (this.intersections.length ? this.fillCollisionColor : this.fillColor);
+                                this.parent.context.fillStyle = (this.collisions.length ? this.fillCollisionColor : this.fillColor);
                                 this.parent.context.strokeStyle = this.strokeColor;
                                 this.parent.context.lineWidth = this.strokeWidth;
                                 this.parent.context.moveTo(first.x, first.y);
@@ -330,13 +365,13 @@
                 },
                 intersects: function(polygon) {
                     if(polygon instanceof PolyTest.Polygon) {
-                        this.removeIntersection(polygon);
-                        polygon.removeIntersection(this);
+                        this.removeCollision(polygon);
+                        polygon.removeCollision(this);
                         
                         for(var v in this.vertices) {
                             if(polygon.contains(this.vertices[v])) {
-                                this.addIntersection(polygon);
-                                polygon.addIntersection(this);
+                                this.addCollision(polygon);
+                                polygon.addCollision(this);
                                 return true;
                             }
                         }
@@ -346,7 +381,7 @@
                             
                             for(var vb = 0; vb < polygon.vertices.length; ++vb) {
                                 var sb = new PolyTest.Segment(polygon.vertices[vb], polygon.vertices[(vb >= polygon.vertices.length - 1) ? 0 : vb + 1]);
-                                
+                                    
                                 if(sa.intersects(sb)) {
                                     return true;
                                 }
@@ -355,6 +390,29 @@
                     }
                     
                     return false;
+                },
+                intersections: function() {
+                    var intersections = [];
+                    
+                    for(var c in this.collisions) {
+                        if(this.collisions[c] instanceof PolyTest.Polygon) {
+                            for(var va = 0; va < this.vertices.length; ++va) {
+                                var sa = new PolyTest.Segment(this.vertices[va], this.vertices[(va >= this.vertices.length - 1) ? 0 : va + 1]),
+                                    polygon = this.collisions[c];
+                                
+                                for(var vb = 0; vb < polygon.vertices.length; ++vb) {
+                                    var sb = new PolyTest.Segment(polygon.vertices[vb], polygon.vertices[(vb >= polygon.vertices.length - 1) ? 0 : vb + 1]),
+                                        intersection = sa.intersection(sb);
+                                        
+                                    if(intersection) {
+                                        intersections.push(intersection);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return intersections;
                 },
                 onMouseDown: function(event) {
                     if(event.button === 0) {
@@ -378,9 +436,9 @@
                         }
                     }
                     
-                    this.removeIntersection(this.parent.mouse);
+                    this.removeCollision(this.parent.mouse.position);
                     if(this.contains(this.parent.mouse.position) && options.mouseIntersections) {
-                        this.addIntersection(this.parent.mouse);
+                        this.addCollision(this.parent.mouse.position);
                     }
                     
                     this.parent.draw();
@@ -395,11 +453,11 @@
                         }
                     }
                 },
-                removeIntersection: function(object) {
-                    var intersectionIndex = this.intersections.indexOf(object);
+                removeCollision: function(object) {
+                    var collisionIndex = this.collisions.indexOf(object);
                     
-                    if(intersectionIndex != -1) {
-                        this.intersections.splice(intersectionIndex, 1);
+                    if(collisionIndex != -1) {
+                        this.collisions.splice(collisionIndex, 1);
                     }
                 }
             };
@@ -413,15 +471,21 @@
             });
             
             poly.addPolygon({
+                fillColor: 'rgba(0, 0, 255, 0.5)',
+                fillCollisionColor: 'rgba(0, 0, 128, 0.5)',
+                vertices: [{ x: 0.8, y: 0.1 }, { x: 0.8, y: 0.2 }, { x: 0.6, y: 0.2 }, { x: 0.6, y: 0.1 }]
+            });
+            
+            poly.addPolygon({
                 fillColor: 'rgba(0, 255, 0, 0.5)',
                 fillCollisionColor: 'rgba(0, 128, 0, 0.5)',
                 vertices: [{ x: 0.4, y: 0.6 }, { x: 0.6, y: 0.6 }, { x: 0.5, y: 0.4 }]
             });
             
             poly.addPolygon({
-                fillColor: 'rgba(0, 0, 255, 0.5)',
-                fillCollisionColor: 'rgba(0, 0, 128, 0.5)',
-                vertices: [{ x: 0.7, y: 0.1 }, { x: 0.8, y: 0.2 }, { x: 0.8, y: 0.3 }, { x: 0.6, y: 0.3 }, { x: 0.6, y: 0.2 } ]
+                fillColor: 'rgba(255, 0, 255, 0.5)',
+                fillCollisionColor: 'rgba(128, 0, 128, 0.5)',
+                vertices: [{ x: 0.7, y: 0.4 }, { x: 0.75, y: 0.35 }, { x: 0.85, y: 0.35 }, { x: 0.9, y: 0.4 }, { x: 0.8, y: 0.5 } ]
             });
             
             poly.draw();
